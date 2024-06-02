@@ -6,5 +6,8 @@ build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-sdl2 = "0.36"
+[dependencies.sdl2]
+version = "0.36"
+
+[dependencies.gl]
+version = "0.14.0"
