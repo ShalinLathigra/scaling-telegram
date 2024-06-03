@@ -67,12 +67,6 @@ fn gl_example(width: u32, height: u32) -> Result<(), String> {
     let _gl =
         gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
-    // initial state of viewport
-    unsafe {
-        gl::Viewport(0,0, width as i32, height as i32);
-        gl::ClearColor(0.3, 0.3, 0.5, 1.0);
-    }
-
     // find source of events.
     let mut event_pump = sdl_context.event_pump()?;
 
@@ -90,8 +84,84 @@ fn gl_example(width: u32, height: u32) -> Result<(), String> {
         &CString::new(include_str!("triangle.frag")).unwrap()
     ).unwrap();
 
+    // initialize program from shaders
     let shader_program = render_gl::Program::from_shaders(&[vert_shader, frag_shader])?;
-    shader_program.set_used();
+
+    // define verts + shapes
+    let vertices: Vec<f32> = vec![
+        -0.5, -0.5, 0.0, 1.0, 0.0, 0.0,
+        0.5, -0.5, 0.0, 0.0, 1.0, 0.0,
+        0.0, 0.5, 0.0, 0.0, 0.0, 1.0,
+    ];
+
+    // Create vertex buffer object
+    // After this section, try converting to gl::Create instead of gl::Gen
+    let mut vbo: gl::types::GLuint = 0;
+    unsafe {
+        // create one vertex buffer starting from vbo
+        // vbo could also be an array of GLuints representing a larger set of objects
+        gl::GenBuffers(1, &mut vbo);
+    }
+    unsafe {
+        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl::BufferData(
+            gl::ARRAY_BUFFER, // target
+            (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr, // size of the buffer. # verts & f32 size
+            vertices.as_ptr() as *const gl::types::GLvoid, // void pointer to the buffer data
+            gl::STATIC_DRAW
+        );
+        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+    }
+    let mut vao: gl::types::GLuint = 0;
+    unsafe {
+        gl::GenVertexArrays(1, &mut vao);
+    }
+    unsafe {
+        // need both vao and vbo for this
+        gl::BindVertexArray(vao);
+        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+
+        // actual data layout for this buffer
+        gl::EnableVertexAttribArray(0); // layout (location = 0) in the vertex shader. Can have multiple vertex attribute arrays
+        gl::VertexAttribPointer(
+            0, // index of generic vertex attribute layout (location = 0)
+            3, // # attributes for this. [1-4], default value is 4. Color?
+            gl::FLOAT, // type of data.
+            gl::FALSE, // is this normalized? (Is the data passed in fixed or floating point)
+            (6 * std::mem::size_of::<f32>()) as gl::types::GLint, // size of steps through the data block
+            std::ptr::null() // offset of the first component. How/why would this be used?
+        );
+
+        // actual data layout for this buffer
+        gl::EnableVertexAttribArray(1); // layout (location = 0) in the vertex shader. Can have multiple vertex attribute arrays
+        gl::VertexAttribPointer(
+            1, // index of generic vertex attribute layout (location = 0)
+            3, // # attributes for this. [1-4], default value is 4. Color?
+            gl::FLOAT, // type of data.
+            gl::FALSE, // is this normalized? (Is the data passed in fixed or floating point)
+            (6 * std::mem::size_of::<f32>()) as gl::types::GLint, // size of steps through the data block
+            (3 * std::mem::size_of::<f32>()) as *const gl::types::GLvoid // offset of the first component. Used to index into the set for defining vertex attributes
+
+            /*
+            in this example, vbo is laid out like :
+            x,y,x,r,g,b,x,y,x,r,g,b,x,y,x,r,g,b,x,y,x,r,g,b
+            stride 6 means that it is broken down into:
+            x,y,x,r,g,b | x,y,x,r,g,b | x,y,x,r,g,b | x,y,x,r,g,b
+            defining each attribute as is done above each having size == 3
+            (x,y,x),(r,g,b) | (x,y,x),(r,g,b) | (x,y,x),(r,g,b) | (x,y,x),(r,g,b)
+            */
+        );
+
+        // unbind buffers
+        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+        gl::BindVertexArray(0);
+    }
+
+    // initial state of viewport shared window
+    unsafe {
+        gl::Viewport(0,0, width as i32, height as i32);
+        gl::ClearColor(0.3, 0.3, 0.5, 1.0);
+    }
 
     // main loop
     'running: loop {
@@ -110,6 +180,18 @@ fn gl_example(width: u32, height: u32) -> Result<(), String> {
 
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
+        }
+
+        // draw triangles
+        shader_program.set_used();
+        unsafe {
+            gl::BindVertexArray(vao);
+            // equivalent of calling the individual subroutines on each bound vertex array
+            gl::DrawArrays(
+                gl::TRIANGLES,
+                0, // index in the enabled array(s)
+                3 // # indices to be rendered
+            );
         }
         window.gl_swap_window();
         // wait for next frame
