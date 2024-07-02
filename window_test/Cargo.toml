@@ -1,3 +1,4 @@
+workspace = { members = ["lib/gl"] }
 [package]
 name = "window_test"
 version = "0.1.0"
@@ -9,5 +10,8 @@ build = "build.rs"
 [dependencies.sdl2]
 version = "0.36"
 
-[dependencies.gl]
-version = "0.14.0"
+[dependencies]
+gl = { path = "lib/gl" }
+
+[features]
+gl_debug = ["gl/debug"]

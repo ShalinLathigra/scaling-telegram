@@ -3,36 +3,37 @@ use std;
 use std::ffi::{ CString, CStr };
 
 pub struct Program {
+    gl: gl::Gl,
     id: gl::types::GLuint,
 }
 
 impl Program {
-    pub fn from_shaders(shaders: &[Shader]) -> Result<Program, String> {
+    pub fn from_shaders(gl: &gl::Gl, shaders: &[Shader]) -> Result<Program, String> {
         // create program
-        let program_id: u32 = unsafe { gl::CreateProgram() };
+        let id: u32 = unsafe { gl.CreateProgram() };
         // attach shaders via opengl
         for shader in shaders {
-            unsafe { gl::AttachShader(program_id, shader.id()); }
+            unsafe { gl.AttachShader(id, shader.id()); }
         }
         // link program
-        unsafe { gl::LinkProgram(program_id); }
+        unsafe { gl.LinkProgram(id); }
 
         // check for errors
         let mut success :gl::types::GLint = 1;
         unsafe {
-            gl::GetProgramiv(program_id, gl::LINK_STATUS, &mut success);
+            gl.GetProgramiv(id, gl::LINK_STATUS, &mut success);
         }
 
         if success == 0 {
             // Read length of error message
             let mut len: gl::types::GLint = 0;
             unsafe {
-                gl::GetProgramiv(program_id, gl::INFO_LOG_LENGTH, &mut len);
+                gl.GetProgramiv(id, gl::INFO_LOG_LENGTH, &mut len);
             }
             let error = create_whitespace_cstr_of_len(len as usize);
             unsafe {
-                gl::GetProgramInfoLog(
-                    program_id,
+                gl.GetProgramInfoLog(
+                    id,
                     len,
                     std::ptr::null_mut(),
                     error.as_ptr() as *mut gl::types::GLchar
@@ -42,14 +43,14 @@ impl Program {
         }
         // detach shaders so they can be freed later
         for shader in shaders {
-            unsafe {gl::DetachShader(program_id, shader.id()); }
+            unsafe {gl.DetachShader(id, shader.id()); }
         }
-        Ok(Program{id: program_id})
+        Ok(Program{gl: gl.clone(), id})
     }
 
     pub fn set_used(&self) {
         unsafe {
-            gl::UseProgram(self.id);
+            self.gl.UseProgram(self.id);
         }
     }
 
@@ -61,32 +62,36 @@ impl Program {
 impl Drop for Program {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteProgram(self.id)
+            self.gl.DeleteProgram(self.id)
         }
     }
 }
 
 pub struct Shader {
+    gl: gl::Gl,
     id: gl::types::GLuint,
 }
 
 impl Shader {
     fn from_source(
+        gl: &gl::Gl,
         source: &CStr,
         kind: gl::types::GLenum,
     ) -> Result<Shader, String> {
-        let id = shader_from_source(source, kind)?;
-        Ok(Shader { id })
+        let id = shader_from_source(gl, source, kind)?;
+        Ok(Shader { gl: gl.clone(), id })
     }
     pub fn from_vert_source(
+        gl: &gl::Gl,
         source: &CStr,
     ) -> Result<Shader, String> {
-        Shader::from_source(source, gl::VERTEX_SHADER)
+        Shader::from_source(gl, source, gl::VERTEX_SHADER)
     }
     pub fn from_frag_source(
+        gl: &gl::Gl,
         source: &CStr,
     ) -> Result<Shader, String> {
-        Shader::from_source(source, gl::FRAGMENT_SHADER)
+        Shader::from_source(gl, source, gl::FRAGMENT_SHADER)
     }
 
     pub fn id(&self) -> gl::types::GLuint {
@@ -97,7 +102,7 @@ impl Shader {
 impl Drop for Shader {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteShader(self.id);
+            self.gl.DeleteShader(self.id);
         }
     }
 }
@@ -106,20 +111,21 @@ impl Drop for Shader {
 // this method is considered safe despite use of unsafe code because it will only ever
 // return Ok if everything else has finished successfully?
 fn shader_from_source(
+    gl: &gl::Gl,
     source: &CStr,
     kind: gl::types::GLuint,
 ) -> Result<gl::types::GLuint, String> {
     // Create and compile Shader
-    let id = unsafe { gl::CreateShader( kind ) };
+    let id = unsafe { gl.CreateShader( kind ) };
     unsafe {
-        gl::ShaderSource(id, 1, &source.as_ptr(), std::ptr::null());
-        gl::CompileShader(id);
+        gl.ShaderSource(id, 1, &source.as_ptr(), std::ptr::null());
+        gl.CompileShader(id);
     }
 
     // Determine Success
     let mut success: gl::types::GLint = 1;
     unsafe {
-        gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
+        gl.GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
     }
 
     // Return Error on failure
@@ -127,11 +133,11 @@ fn shader_from_source(
         // Read length of error message
         let mut len: gl::types::GLint = 0;
         unsafe {
-            gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
+            gl.GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
         }
         let error = create_whitespace_cstr_of_len(len as usize);
         unsafe {
-            gl::GetShaderInfoLog(
+            gl.GetShaderInfoLog(
                 id,
                 len,
                 std::ptr::null_mut(),
