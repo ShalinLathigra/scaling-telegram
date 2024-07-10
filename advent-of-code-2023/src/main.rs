@@ -1,6 +1,6 @@
 use {
     regex::Regex, std::{
-        env, ops::Index, time::Instant
+        env, time::Instant
         }
 };
 
@@ -219,24 +219,26 @@ fn solve_2b() {
 // Same with symbols
 // two different 2d arrays
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Number {
-    point: Point,
+    bounds: Bounds,
     str: String,
-    val: u16,
+    val: u64,
+    valid: bool,
 }
 
 impl Number {
-    fn from(str: String, point: Point) -> Result<Number, String> {
-        let val = str.parse::<u16>();
+    fn from(str: String, bounds: Bounds) -> Result<Number, String> {
+        let val = str.parse::<u64>();
         if val.is_err() {
             return Err(format!("Attempted to parse bad err: {}", val.unwrap_err()).to_string())
         }
         let val = val.unwrap();
         Ok(Number{
-            point,
+            bounds,
             str,
             val,
+            valid: false,
         })
     }
 }
@@ -248,87 +250,159 @@ struct Point {
 }
 
 impl Point {
-    pub fn make(&self, width: &usize) -> usize {
+    pub fn to_index(&self, width: &usize) -> usize {
         self.x + self.y * width
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Bounds {
+    point: Point,
+    length: usize,
+    skin_width: usize,
+}
+
+impl Bounds {
+    pub fn overlaps(&self, target: &Bounds) -> bool {
+        let (s_left, s_right, s_top, s_bot) = (
+            if self.point.x > 0 {self.point.x-self.skin_width} else {0},
+            self.point.x + self.length,
+            self.point.y + self.skin_width,
+            if self.point.y > 0 {self.point.y-self.skin_width} else {0},
+        );
+        let (t_left, t_right, t_top, t_bot) = (
+            if target.point.x > 0 {target.point.x-target.skin_width} else {0},
+            target.point.x + target.length,
+            target.point.y + target.skin_width,
+            if target.point.y > 0 {target.point.y-target.skin_width} else {0},
+        );
+        // Make sure target is not outside of the bounds of the source
+        if t_left > s_right || t_right < s_left {
+            return false;
+        }
+        // One of the two is below x bounds
+        if t_top < s_bot || t_bot > s_top {
+            return false;
+        }
+        // Within the bounds on both axes, therefore a collision has occurred
+        true
     }
 }
 
 #[derive(Debug,Clone)]
 struct Symbol {
-    point: Point,
+    bounds: Bounds,
     ch: char,
 }
 
 impl Symbol {
-    fn from(ch: char, point: Point) -> Result<Symbol, String> {
+    fn from(ch: char, bounds: Bounds) -> Result<Symbol, String> {
         Ok(Symbol{
-            point,
+            bounds,
             ch,
         })
     }
 }
 
+struct Board <> {
+    numbers: Vec<Number>,
+    symbols: Vec<Symbol>,
+}
 
+impl Board {
+    pub fn create() -> Board{
+        let numbers = Vec::<Number>::new();
+        let symbols = Vec::<Symbol>::new();
+        Board{numbers,symbols}
+    }
+
+    pub fn add_number(&mut self, bounds: Bounds, str: String) {
+        let mut num = Number::from(str, bounds).unwrap();
+        // println!("ADD N: {:?}", num);
+        for symbol in self.symbols.iter().rev() {
+            // println!("\tComparing against {} at {:?}", symbol.ch, symbol.bounds);
+            if num.bounds.overlaps(&symbol.bounds) {
+                num.valid = true;
+                break;
+            }
+            if num.bounds.point.y > symbol.bounds.point.y + 1 {
+                break;
+            }
+        }
+        // println!("\t\tNum: {} valid = {}", num.val, num.valid);
+        self.numbers.push(num);
+        // println!("\tDONE");
+    }
+
+    pub fn add_symbol(&mut self, bounds: Bounds, ch: char) {
+        let symbol = Symbol::from(ch, bounds).unwrap();
+        // println!("ADD S: {:?}", symbol);
+        for num in self.numbers.iter_mut().rev() {
+            // println!("\tComparing against {} at {:?} ", num.val, num.bounds);
+            if symbol.bounds.point.y > num.bounds.point.y + 1 {
+                // gone too far
+                break;
+            }
+            if !num.valid && symbol.bounds.overlaps(&num.bounds){
+                num.valid = true;
+            }
+            // println!("\t\tNum: {} valid = {:?}", num.val, num.valid);
+        }
+        self.symbols.push(symbol);
+        // println!("\tDONE");
+    }
+}
 
 fn solve_3a(input: &str) {
-    let actual = 0;
-    let expected = 4361;
+    let mut actual: u64 = 0;
+    // let expected: u64 = 4361;
 
     let width = input.split("\n").nth(0).unwrap().len();
 
+    let mut board = Board::create();
+
     // when reading the array, how do we find the ones that are valid?
     // When we encounter a number, add it to
-    let mut numbers = Vec::new();
-    let mut symbols = Vec::new();
     let mut collected_number = String::new();
-    let mut start_index = Point{x:0,y:0};
-    let mut last_index = Point{x:0,y:0};
+    let mut start_point = Point{x:0,y:0};
+    let mut last_point = Point{x:0,y:0};
     for (y, line) in input.split("\n").enumerate(){
         let segments = line.char_indices().filter(| (_, char) | *char != '.' && !char.is_ascii_whitespace());
-        for (x, char) in segments {
-            let index = Point{x,y};
-            // if char is not numeric or > last_index + 1
-            // tie off numbers, track symbols
-            if (!char.is_numeric()) || index.make(&width) > last_index.make(&width) + 1 {
+        for (x, ch) in segments {
+            let current_point = Point{x,y};
+            // finish numbers or track symbols
+            if (!ch.is_numeric()) || current_point.to_index(&width) > last_point.to_index(&width) + 1 {
                 if collected_number.len() > 0 {
-                    let num = Number::from(collected_number.clone(), start_index.clone()).unwrap();
-                    println!("FOUND {:?}", num);
-                    numbers.push(num);
+                    board.add_number(Bounds{point: start_point.clone(), length: collected_number.len(), skin_width: 0}, collected_number.clone());
                 }
                 collected_number.clear();
 
-                if !char.is_numeric() {
-                    let symbol = Symbol::from(char, index.clone()).unwrap();
-                    // create game board that has the add_symbol and add_number functions
-                    // add_symbol will check over all numbers in reverse order (current row, last row)
-                        // once hit number that is before last row, skip
-                    // add_number will check over all symbols in reverse order (current row, last row)
-                        // once hit symbol that is before last row, skip
-                    // add "in bounds" function to compare two bounding boxes
-                    println!("FOUND {:?}", symbol);
-                    symbols.push(symbol);
+                if !ch.is_numeric() {
+                    board.add_symbol(Bounds{point: current_point.clone(), length: 1, skin_width: 1}, ch);
                 }
             }
-            if char.is_numeric(){
+            // collect numeric chars into a string
+            if ch.is_numeric(){
                 if collected_number.len() == 0 {
-                    start_index = Point{x,y};
+                    start_point = Point{x,y};
                 }
-                collected_number.push(char);
+                collected_number.push(ch);
             }
-            last_index = index;
+            last_point = current_point;
         }
     }
+    // make sure any numbers at the very end of the list are captured
     if collected_number.len() > 0 {
-        let new_num = Number::from(collected_number.clone(), start_index.clone()).unwrap();
-        println!("FOUND {:?}", new_num);
-        numbers.push(new_num);
+        board.add_number(Bounds{point: start_point.clone(), length: collected_number.len(), skin_width: 0}, collected_number.clone());
     }
     // if actual !
-    if actual == expected {
-        println!("SUCCESS");
-    } else {
-        println!("FAILED");
-    }
+    actual = board.numbers.iter().filter(| n | n.valid).map(| c | c.val).sum();
+    println!("Got: {}", actual);
+    // if actual == expected {
+    //     println!("SUCCESS");
+    // } else {
+    //     println!("FAILED got: {} expected: {}", actual, expected);
+    // }
 }
 
 /* UTILS */
