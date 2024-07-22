@@ -210,7 +210,7 @@ fn solve_2b() {
 // Parameters:
 // Taking in a big ol' grid
 // Translate that grid into a grid of numbers and symbols
-// Separately, figure out 
+// Separately, figure out
 
 fn solve_3a(input: &str) {
     let mut actual: u64 = 0;

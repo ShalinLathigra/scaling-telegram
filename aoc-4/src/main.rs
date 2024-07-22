@@ -1,10 +1,10 @@
-use {
+use
     std::{
         env,
         fmt,
         time::Instant,
-    },
-};
+    }
+;
 
 const SIMPLE_TEST_ARG: &str = "simple_test";
 const SIMPLE_REAL_ARG: &str = "simple_real";
@@ -50,7 +50,7 @@ fn solve_simple(input: &str) {
         let body = line.split(": ").collect::<Vec<&str>>()[1].split(" | ").collect::<Vec<&str>>();
         let winners = body[0].split(" ").map(|s| s.parse::<u32>().unwrap()).collect::<Vec<u32>>();
         let numbers = body[1].split(" ").map(|s| s.parse::<u32>().unwrap()).collect::<Vec<u32>>();
-        
+
         let mut num_winners = 0;
         for number in &numbers {
             if winners.iter().any(|&x| x == *number) {
@@ -81,7 +81,7 @@ struct Card {
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({}: {})", self.card_number, self.count)
-        
+
     }
 }
 
@@ -97,7 +97,7 @@ fn solve_complex(input: &str) {
         let body = line.split(": ").collect::<Vec<&str>>()[1].split(" | ").collect::<Vec<&str>>();
         let winners = body[0].split(" ").map(|s| s.parse::<u32>().unwrap()).collect::<Vec<u32>>();
         let numbers = body[1].split(" ").map(|s| s.parse::<u32>().unwrap()).collect::<Vec<u32>>();
-        
+
         let mut num_winners = 0;
         for number in &numbers {
             if winners.iter().any(|&x| x == *number) {
@@ -106,7 +106,7 @@ fn solve_complex(input: &str) {
         }
         cards.push(Card{card_number: _i as u32, count: num_winners});
     }
-    
+
     let mut card_counts = cards.clone().iter().map(|_| 1).collect::<Vec<u32>>();
     for (i, card) in cards.iter().enumerate() {
         for j in 0..card.count {
@@ -118,6 +118,6 @@ fn solve_complex(input: &str) {
             card_counts[index] += card_counts[i];
         }
     }
-    
+
     println!("counts:{:?}\nsum:{}", card_counts, card_counts.iter().sum::<u32>());
 }
